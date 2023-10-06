@@ -18,6 +18,11 @@ from models.aff_corrs import AffCorrs_V1
 # User-defined constants
 SUPPORT_DIR = "../affordance_database/usb/"
 TARGET_IMAGE_PATH = "./images/demo_affordance/eth.jpg"
+SUPPORT_DIR = "../affordance_database/car/"
+TARGET_IMAGE_PATH = "../figures/car/car2.jpg"
+
+# SUPPORT_DIR = "../affordance_database/cat/"
+# TARGET_IMAGE_PATH = "../figures/cat/cat1.jpg"
 
 # Other constants
 PATH_TO_CONFIG  = "../config/default_config.yaml"
@@ -68,9 +73,20 @@ if __name__ == "__main__":
 
         # Prepare inputs
         img1_path = f"{SUPPORT_DIR}/prototype.png"
+        plt.imshow(Image.open(img1_path))
+        plt.title("Prototype")
+        plt.show()
         aff1_path = f"{SUPPORT_DIR}/affordance.npy"
         rgb_a = load_rgb(img1_path)
         parts = np.load(aff1_path, allow_pickle=True).item()['masks']
+        # print(len(parts))
+        # print(parts[0].shape, parts[0].dtype, parts[0].max(), parts[0].min())
+        # for part in parts:
+        #     part = part.astype(np.uint8) * 255
+            # cv2.imshow("part", part)
+            # cv2.waitKey(0)
+        # exit()
+        # parts = parts[:1]
         affordances = [None for _ in parts]
         rgb_b = load_rgb(TARGET_IMAGE_PATH)
 
@@ -79,6 +95,7 @@ if __name__ == "__main__":
         model.generate_source_clusters()
         model.set_target(Image.fromarray(rgb_b))
         model.generate_target_clusters()
+        model.visualize_pca()
         parts_out, aff_out = model.find_correspondences()
 
         ## Display correspondence

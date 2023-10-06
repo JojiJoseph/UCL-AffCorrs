@@ -24,6 +24,10 @@ with open("./config/default_config.yaml") as f:
 EXAMPLE_TARGET = "./demos/images/demo_parts/example1/hammer_02_00000001_rgb.jpg"
 IMDIR = Path("./demos/images/demo_parts/example1")
 
+EXAMPLE_TARGET = "./figures/cat/cat1.jpg"
+IMDIR = Path("./figures/cat")
+
+
 LABEL_COLORS = [(255,0,0), (0,255,0), (0,0,255), (255,0,255),
                 (0,125,125), (125,125,0), (200,255,50),
                 (255, 125, 220), (10, 125, 255)]
@@ -199,6 +203,7 @@ class HeatmapVisualization(object):
             self.mask1 = cv2.circle(self.mask1, (u,v), 4, (255,255,255), -1)
 
         label_colors = torch.Tensor(LABEL_COLORS)
+        m_i = -1
         for m_i, mask_i in enumerate(self.masks):
             mask = torch.stack([torch.Tensor(mask_i).cuda()/255.]*3, dim=-1)
             overlay = torch.ones( img_1_w_annot.shape ).cuda() \
@@ -208,11 +213,14 @@ class HeatmapVisualization(object):
                           + (img_1_w_annot*0.6+overlay*0.4) * (mask) ) 
             img_1_w_annot = img_1_w_annot.cpu().numpy().astype(np.uint8)
 
+        m_i += 1
+        if m_i >= len(LABEL_COLORS):
+            m_i = len(LABEL_COLORS)-1
         mask = torch.stack([torch.Tensor(self.mask1).cuda()/255.]*3, dim=-1)
-        overlay = torch.ones( img_1_w_annot.shape ).cuda() * torch.Tensor([[ [255,0,0] ]]).cuda()
+        overlay = torch.ones( img_1_w_annot.shape ).cuda() * label_colors[m_i].unsqueeze(0).unsqueeze(0).cuda()
         img_1_w_annot = torch.Tensor(img_1_w_annot).cuda()
         img_1_w_annot = (  img_1_w_annot * (1-mask) \
-                      + (img_1_w_annot*0.6+overlay*0.4) * (mask) ) 
+                      + (img_1_w_annot*0.6+overlay*0.5) * (mask) ) 
         img_1_w_annot = img_1_w_annot.cpu().numpy().astype(np.uint8)
 
         self.draw_saved_recticles(img_1_w_annot, img_2_w_annot)

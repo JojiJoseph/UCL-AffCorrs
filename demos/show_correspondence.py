@@ -19,6 +19,12 @@ with open("../config/default_config.yaml") as f:
 img1_path = "./images/demo_points/001.jpg"
 img2_path = "./images/demo_points/002.jpg"
 
+img1_path = "../figures/cat1.jpg"
+img2_path = "../figures/cat2.jpg"
+
+img1_path = "../figures/car1.jpg"
+img2_path = "../figures/car2.jpg"
+
 # Color definitions
 white = (255,255,255)
 black = (0,0,0)

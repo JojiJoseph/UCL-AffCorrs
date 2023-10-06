@@ -202,6 +202,7 @@ class ViTExtractor:
             input = input[0]
             B, N, C = input.shape
             qkv = module.qkv(input).reshape(B, N, 3, module.num_heads, C // module.num_heads).permute(2, 0, 3, 1, 4)
+            print("num heads", module.num_heads)
             self._feats.append(qkv[facet_idx]) #Bxhxtxd
         return _inner_hook
 

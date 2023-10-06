@@ -145,7 +145,7 @@ def image_resize(im, s=None):
     if s is None:
         return im
     if isinstance(s, int):
-        im = im.resize((s,s), Image.ANTIALIAS)
+        im = im.resize((s,s), Image.LANCZOS)
     if isinstance(s, List):
         if len(s)!=2: raise ValueError()
         if None in s:
@@ -154,9 +154,9 @@ def image_resize(im, s=None):
             ratio = s[0]/min(shape)
             im = im.resize( tuple(reversed(
                               get_load_shape(im, s[0]))),
-                          Image.ANTIALIAS)
+                          Image.LANCZOS)
         else:
-            im = im.resize(s, Image.ANTIALIAS)
+            im = im.resize(s, Image.LANCZOS)
     return im
 
 def map_descriptors_to_clusters(desc, fg_centroids, bg_centroids):
@@ -209,7 +209,7 @@ def get_part_correspondence(query_mask, p_sim, C, tgt_image,
   """ Returns the final part correspondence after passing through the CRF """
   # Transform into FB/BG probability where FG is selected area.
   # Sum HW into FG and BG (2,K)
-  mask_ = resize(img_as_bool(query_mask), p_sim.shape[:2]).astype(np.bool)
+  mask_ = resize(img_as_bool(query_mask), p_sim.shape[:2]).astype(bool)
   fg = p_sim[mask_].sum(0) 
 
   # Remap to Image 2 (2, HW)
@@ -234,7 +234,7 @@ def overlay_segment(img, seg, color, alpha=0.4):
     :param color: np.ndarray, vec3 color
     :return: overlaid image.
     """
-    seg = seg.astype(np.bool)
+    seg = seg.astype(bool)
     img[seg] = (img[seg]*alpha).astype(np.uint8) \
                 + (1-alpha)*np.asarray(color).astype(np.uint8)
     return img          

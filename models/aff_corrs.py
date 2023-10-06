@@ -5,7 +5,9 @@ import numpy as np
 from PIL import Image
 # Skimage
 from skimage.transform import resize
+from sklearn.decomposition import PCA
 from skimage import img_as_bool
+from sklearn.manifold import Isomap
 # Pytorch
 import torch
 from pytorch_metric_learning import distances
@@ -22,6 +24,7 @@ from .correspondence_functions import (get_load_shape,
                                        uv_desc_to_im,
                                        map_values_to_segments,
                                        )
+import matplotlib.pyplot as plt
 
 def to_int(x):
   """ Returns an integer type object 
@@ -46,6 +49,8 @@ class AffCorrs_V1(object):
         # TODO: Compare Layer 9 vs Layer 11 descriptors. Note that this
         # is only used for point correspondence which is optional.
         self.use_L9_corrs = True
+
+        self.all_feats = [] # This variable is used to store the features of both source and destination
         return
 
     def _cleanup(self):
@@ -96,6 +101,10 @@ class AffCorrs_V1(object):
             else: 
                 self.src_corr_descs = self.src_descs
             self.src_corr_num_patches = self.model.num_patches
+            from sklearn.manifold import Isomap
+            for i in range(len(self.model._feats)):
+                print(self.model._feats[i].shape)
+            
         return
 
     def generate_source_clusters(self, N_Kq=10):
@@ -105,14 +114,29 @@ class AffCorrs_V1(object):
         self.N_Kq = N_Kq
         nps = self.src_num_patches
         self.src_desc_image = self.src_descs.numpy().reshape(nps[0],nps[1],-1)
+        print(self.src_desc_image.shape, self.src_desc_image.dtype, self.src_desc_image.max(), self.src_desc_image.min())
+        # exit()
         self.K_queries = []
         for part in self.src_query_parts:
-            q_a = resize(part, nps).astype(np.bool)
+            q_a = resize(part, nps).astype(bool)
             # extract Source K-means descriptors
             query_desc = self.src_desc_image[q_a]
             K_query, labels = get_K_means_v2([query_desc[None,None,...]], 1, 
                                             self.args["elbow"], 
                                             list(range(N_Kq,N_Kq+1)))
+            plt.imshow(q_a)
+            plt.show()
+            # print((q_a == True).sum())
+            colors = np.random.rand(10, 3)
+            cluster_image = np.zeros((*nps, 3))
+            cluster_image[q_a==True] = colors[labels.cpu().numpy()]
+            cluster_image = resize(cluster_image, self.src_img_resized.size[::-1])
+            cluster_image = (cluster_image * 255)*0.5 + 0.5*np.asarray(self.src_img_resized)
+            cluster_image = cluster_image.astype(np.uint8)
+            plt.imshow(cluster_image)
+            plt.show()
+            print(K_query.shape, len(labels), q_a.shape)
+            # exit()
             self.K_queries.append(K_query)
 
 
@@ -147,6 +171,11 @@ class AffCorrs_V1(object):
                                         self.args["layer"], 
                                         self.args["facet"], 
                                         self.args["bin"]).cpu()
+            print(self.model._feats[0].shape, self.model._feats[0].dtype, self.model._feats[0].max(), self.model._feats[0].min())
+            print(self.model.num_patches)
+            from sklearn.manifold import Isomap
+
+
             self.tgt_num_patches = self.model.num_patches
             self.tgt_load_size = self.model.load_size
             if self.use_L9_corrs:
@@ -174,6 +203,25 @@ class AffCorrs_V1(object):
                               self.args["low_res_saliency_maps"], 
                               self.device, thresh=0.065 )
         self.tgt_saliency_mask = saliency_map
+        print(saliency_map.shape, saliency_map.dtype, saliency_map.max(), saliency_map.min())
+        plt.imshow(saliency_map)
+        plt.title("Saliency map")
+        plt.show()
+        plt.imshow(self.tgt_img)
+        plt.title("Target image")
+        plt.show()
+
+        import cv2
+        saliency_map = np.asarray(saliency_map, dtype=np.float32)
+        print(saliency_map.shape, saliency_map.dtype)
+        tgt_img = np.asarray(self.tgt_img, dtype=np.float32)
+        saliency_map = cv2.resize(saliency_map, tgt_img.shape[:2][::-1])
+        saliency_map[saliency_map<0.5] = 0.5
+        masked_img = saliency_map[...,None] * self.tgt_img
+        plt.imshow(masked_img.astype(np.uint8))
+        plt.title("Target image masked")
+        plt.show()
+        # exit()
         return
 
     
@@ -185,11 +233,24 @@ class AffCorrs_V1(object):
         nps = self.tgt_num_patches
         self.tgt_desc_image = self.tgt_descs.numpy().reshape(nps[0],nps[1],-1)
         fg_desc = self.tgt_desc_image [self.tgt_saliency_mask==True]
-        K_target, _ = get_K_means_v2([fg_desc[None,None,...]], 1, 
+        K_target, labels = get_K_means_v2([fg_desc[None,None,...]], 1, 
                                           self.args["elbow"], 
                                           list(range(N_Kt,N_Kt+1)))
+        # plt.imshow(q_a)
+        # plt.show()
+        # print((q_a == True).sum())
+        print(K_target)
+        colors = np.random.rand(len(K_target), 3)
+        cluster_image = np.zeros((*nps, 3))
+        cluster_image[self.tgt_saliency_mask==True] = colors[labels.cpu().numpy()]
+        cluster_image = resize(cluster_image, self.tgt_img_resized.size[::-1])
+        cluster_image = (cluster_image * 255)*0.5 + 0.5*np.asarray(self.tgt_img_resized)
+        cluster_image = cluster_image.astype(np.uint8)
+        plt.imshow(cluster_image)
+        plt.show()
+        
         bg_desc = self.tgt_desc_image [self.tgt_saliency_mask==False]
-        K_target_bg, _ = get_K_means_v2([bg_desc[None,None,...]], 8, 
+        K_target_bg, labels = get_K_means_v2([bg_desc[None,None,...]], 8, 
                                                 self.args["elbow"],
                                                 list(range(N_Kt_bg,N_Kt_bg+1)))
         
@@ -201,6 +262,14 @@ class AffCorrs_V1(object):
         self.K_target = K_target 
         self.K_target_bg = K_target_bg
         self.K_target_mapped = C
+        colors = np.random.rand(len(K_target_bg), 3)
+        cluster_image = np.zeros((*nps, 3))
+        cluster_image[self.tgt_saliency_mask==False] = colors[labels.cpu().numpy()]
+        cluster_image = resize(cluster_image, self.tgt_img_resized.size[::-1])
+        cluster_image = (cluster_image * 255)*0.5 + 0.5*np.asarray(self.tgt_img_resized)
+        cluster_image = cluster_image.astype(np.uint8)
+        plt.imshow(cluster_image)
+        plt.show()
         return
 
     def find_part_correspondences(self, temp_ts=0.02, temp_qt=0.2):
@@ -232,7 +301,7 @@ class AffCorrs_V1(object):
             # Calculate probability that each cluster in 
             # target image is matching to the part mask in
             # the source image.
-            part_mask = resize(img_as_bool(part), src_nps).astype(np.bool)
+            part_mask = resize(img_as_bool(part), src_nps).astype(bool)
             P_tq = P_ts_img[:,part_mask]
             P_tq = P_tq.sum(-1) # [K2,]
 
@@ -320,6 +389,26 @@ class AffCorrs_V1(object):
                                                   patch, stride)
                 aff_out.append( (u_im_k_B,v_im_k_B) )
         return aff_out
+    
+    def visualize_pca(self):
+        print(self.src_descs.shape, self.tgt_descs.shape)
+        feats = np.concatenate([self.src_descs[0,0]/np.linalg.norm(self.src_descs[0,0],axis=-1, keepdims=True),self.tgt_descs[0,0]/np.linalg.norm(self.tgt_descs[0,0],axis=-1, keepdims=True)], axis=0)
+        print(feats.shape)
+
+        pca = PCA(n_components=3)
+        feats = pca.fit_transform(feats)
+        # isomap = Isomap(n_components=3)
+        # feats = isomap.fit_transform(feats)
+        feats = (feats - feats.min(axis=0)) / (feats.max(axis=0) - feats.min(axis=0))
+        fig, axs = plt.subplots(1, 2)
+        # first subplot
+        axs[0].imshow(feats[:len(self.src_descs[0,0])].reshape((*self.src_num_patches, 3)), interpolation='nearest')
+        # second subplot
+        axs[1].imshow(feats[len(self.src_descs[0,0]):].reshape((*self.tgt_num_patches, 3)), interpolation='nearest')
+        plt.suptitle("PCA of source and target features")
+        # plt.suptitle("Isomap of source and target features")
+        plt.show()
+        exit()
 
 
 def build_affcorrs(version=1, **kwargs):
